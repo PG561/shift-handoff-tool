@@ -199,6 +199,44 @@
       font-size: 15px;
     }
   }
+
+  .recent-section {
+    margin-top: 36px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+  }
+  .recent-item {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .recent-item:hover {
+    border-color: var(--red);
+  }
+  .recent-item .meta {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .recent-item .sub {
+    font-size: 12.5px;
+    color: var(--gray);
+    margin-top: 2px;
+  }
+  .recent-empty {
+    color: var(--gray);
+    font-size: 14px;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: var(--gray);
+    cursor: pointer;
+    text-decoration: underline;
+  }
 </style>
 </head>
 <body>
@@ -246,6 +284,11 @@
     <div class="section-label">Handoff summary</div>
     <div class="card" id="summaryText"></div>
     <button class="copybtn" id="copyBtn" type="button">Copy to clipboard</button>
+  </div>
+
+  <div class="recent-section" id="recentSection">
+    <div class="section-label">Recent handoffs</div>
+    <div id="recentList"><p class="recent-empty">Loading...</p></div>
   </div>
 </div>
 
@@ -341,6 +384,7 @@ form.addEventListener('submit', async (e) => {
     summaryText.textContent = data.summary;
     result.classList.add('show');
     status.textContent = '';
+    loadRecent();
   } catch (err) {
     status.textContent = 'Something went wrong. Try again.';
     status.classList.add('error');
@@ -354,6 +398,50 @@ copyBtn.addEventListener('click', () => {
   copyBtn.textContent = 'Copied!';
   setTimeout(() => (copyBtn.textContent = 'Copy to clipboard'), 1500);
 });
+
+const recentList = document.getElementById('recentList');
+
+function formatWhen(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+}
+
+async function loadRecent() {
+  try {
+    const res = await fetch('/summaries');
+    const summaries = await res.json();
+
+    if (summaries.length === 0) {
+      recentList.innerHTML = '<p class="recent-empty">No handoffs saved yet.</p>';
+      return;
+    }
+
+    recentList.innerHTML = '';
+    summaries.forEach((entry) => {
+      const item = document.createElement('div');
+      item.className = 'recent-item';
+      item.innerHTML = `
+        <div class="meta">${entry.name || 'Unknown'} — ${entry.shiftDate || ''} (${entry.shiftTime || ''})</div>
+        <div class="sub">${formatWhen(entry.createdAt)}</div>
+      `;
+      item.addEventListener('click', () => showSavedSummary(entry));
+      recentList.appendChild(item);
+    });
+  } catch (err) {
+    recentList.innerHTML = '<p class="recent-empty">Could not load recent handoffs.</p>';
+  }
+}
+
+function showSavedSummary(entry) {
+  summaryText.textContent = entry.summary;
+  result.classList.add('show');
+  result.scrollIntoView({ behavior: 'smooth' });
+}
+
+loadRecent();
+
 </script>
 </body>
 </html>

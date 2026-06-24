@@ -1,53 +1,447 @@
-require('dotenv').config();
-const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shift Handoff Tool</title>
+<style>
+  :root {
+    --red: #C8102E;
+    --dark: #1C1C1C;
+    --gray: #6B6B6B;
+    --bg: #FAFAF8;
+    --border: #E2E0DB;
+    --warn-bg: #FFF4E5;
+    --warn-border: #E8A33D;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--dark);
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+  header {
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 0;
+    color: var(--gray);
+    font-size: 14px;
+  }
+  .bar {
+    height: 4px;
+    background: var(--red);
+    width: 48px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .row > div { flex: 1; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--dark);
+  }
+  input, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #fff;
+  }
+  input:focus, textarea:focus {
+    outline: 2px solid var(--red);
+    outline-offset: 1px;
+  }
+  textarea {
+    resize: vertical;
+    min-height: 90px;
+    line-height: 1.5;
+  }
+  section {
+    margin-bottom: 22px;
+  }
+  .section-label {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    color: var(--gray);
+  }
+  .hint {
+    font-size: 12.5px;
+    color: var(--gray);
+    margin: 4px 0 8px;
+  }
+  button {
+    width: 100%;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  button:focus-visible {
+    outline: 3px solid var(--dark);
+    outline-offset: 2px;
+  }
+  #result {
+    margin-top: 28px;
+    display: none;
+  }
+  #result.show { display: block; }
+  .card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  .status {
+    font-size: 14px;
+    color: var(--gray);
+    margin-top: 10px;
+    text-align: center;
+  }
+  .error {
+    color: var(--red);
+  }
+  .copybtn {
+    margin-top: 12px;
+    background: var(--dark);
+  }
+  .promise-card {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .promise-card .row {
+    margin-bottom: 10px;
+  }
+  .promise-card label {
+    font-size: 12px;
+    color: var(--dark);
+  }
+  .promise-card textarea {
+    min-height: 64px;
+  }
+  .remove-btn {
+    width: auto;
+    background: none;
+    color: var(--gray);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    margin-top: 0;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+  }
+  .remove-btn:hover { color: var(--red); border-color: var(--red); }
+  .add-btn {
+    background: #fff;
+    color: var(--dark);
+    border: 1.5px dashed var(--border);
+    margin-bottom: 4px;
+  }
+  .add-btn:hover { border-color: var(--red); color: var(--red); }
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+  @media (max-width: 480px) {
+    .wrap {
+      padding: 20px 16px 60px;
+    }
+    header h1 {
+      font-size: 20px;
+    }
+    .row {
+      flex-direction: column;
+      gap: 14px;
+    }
+    .promise-card .row {
+      flex-direction: row;
+      gap: 10px;
+    }
+    button {
+      padding: 13px;
+      font-size: 15px;
+    }
+  }
 
-const app = express();
-app.use(express.json());
-app.use(express.static('public'));
+  .recent-section {
+    margin-top: 36px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+  }
+  .recent-item {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .recent-item:hover {
+    border-color: var(--red);
+  }
+  .recent-item .meta {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .recent-item .sub {
+    font-size: 12.5px;
+    color: var(--gray);
+    margin-top: 2px;
+  }
+  .recent-empty {
+    color: var(--gray);
+    font-size: 14px;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: var(--gray);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="bar"></div>
+    <h1>Shift Handoff Tool</h1>
+    <p>Fill this out at the end of your shift. The next lead reads it before they start.</p>
+  </header>
 
-app.post('/generate', async (req, res) => {
-  try {
-    const { name, shiftDate, shiftTime, promises, notes } = req.body;
+  <form id="form">
+    <div class="row">
+      <div>
+        <label for="name">Your name</label>
+        <input id="name" required />
+      </div>
+      <div>
+        <label for="shiftDate">Date</label>
+        <input id="shiftDate" required placeholder="June 23, 2026" />
+      </div>
+      <div>
+        <label for="shiftTime">Shift</label>
+        <input id="shiftTime" required placeholder="Evening" />
+      </div>
+    </div>
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      messages: [
-        {
-          role: "user",
-          content: `You are helping a fast-food shift lead write a clear handoff note for the next shift lead. Create a summary with this exact structure:
+    <section>
+      <div class="section-label">Customer promises</div>
+      <p class="hint">Remakes, refunds, callbacks — anything the next shift needs to honor. Add one card per customer.</p>
+      <div id="promiseList"></div>
+      <button type="button" class="add-btn" id="addPromiseBtn">+ Add a customer promise</button>
+    </section>
 
-1. A "CUSTOMER PROMISES" section FIRST, at the top, in a way that stands out — these are specific commitments made to customers (remakes, refunds, callbacks, etc) that the NEXT shift lead absolutely must honor or follow up on. If none were given, write "No outstanding customer promises."
-2. Then other relevant sections only if needed (Inventory, Staffing, Prep Needed, Other).
+    <section>
+      <div class="section-label">General notes</div>
+      <p class="hint">Inventory, staffing, prep needed, anything else.</p>
+      <textarea id="notes" placeholder="e.g. Low on ranch, 2 bottles left. Sarah called out tomorrow AM."></textarea>
+    </section>
 
-Keep it concise and practical. Use the actual name, date, and shift given below — never use placeholder text.
+    <button type="submit" id="submitBtn">Generate handoff summary</button>
+    <div class="status" id="status"></div>
+  </form>
 
-Left by: ${name}
-Date: ${shiftDate}
-Shift: ${shiftTime}
+  <div id="result">
+    <div class="section-label">Handoff summary</div>
+    <div class="card" id="summaryText"></div>
+    <button class="copybtn" id="copyBtn" type="button">Copy to clipboard</button>
+  </div>
 
-Customer promises made this shift:
-${promises || 'None'}
+  <div class="recent-section" id="recentSection">
+    <div class="section-label">Recent handoffs</div>
+    <div id="recentList"><p class="recent-empty">Loading...</p></div>
+  </div>
+</div>
 
-General shift notes:
-${notes || 'None'}`
-        }
-      ],
-    });
+<script>
+const form = document.getElementById('form');
+const status = document.getElementById('status');
+const result = document.getElementById('result');
+const summaryText = document.getElementById('summaryText');
+const submitBtn = document.getElementById('submitBtn');
+const copyBtn = document.getElementById('copyBtn');
+const promiseList = document.getElementById('promiseList');
+const addPromiseBtn = document.getElementById('addPromiseBtn');
 
-    res.json({ summary: response.content[0].text });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong generating the summary.' });
+let promiseCount = 0;
+
+function addPromiseCard() {
+  promiseCount++;
+  const id = promiseCount;
+  const card = document.createElement('div');
+  card.className = 'promise-card';
+  card.dataset.id = id;
+  card.innerHTML = `
+    <button type="button" class="remove-btn" data-remove="${id}">Remove</button>
+    <div class="row">
+      <div>
+        <label>Customer name</label>
+        <input data-field="customerName" placeholder="Maria" />
+      </div>
+      <div>
+        <label>Order time</label>
+        <input data-field="orderTime" placeholder="7:40 PM" />
+      </div>
+    </div>
+    <label>What was promised</label>
+    <textarea data-field="promiseDetail" placeholder="e.g. Free remake of her order, ready tomorrow morning, no charge"></textarea>
+  `;
+  promiseList.appendChild(card);
+}
+
+promiseList.addEventListener('click', (e) => {
+  if (e.target.dataset.remove) {
+    const card = e.target.closest('.promise-card');
+    card.remove();
   }
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Shift Handoff Tool running at http://localhost:${PORT}`);
+addPromiseBtn.addEventListener('click', addPromiseCard);
+
+// Start with one empty promise card visible by default
+addPromiseCard();
+
+function collectPromises() {
+  const cards = promiseList.querySelectorAll('.promise-card');
+  const entries = [];
+  cards.forEach((card) => {
+    const customerName = card.querySelector('[data-field="customerName"]').value.trim();
+    const orderTime = card.querySelector('[data-field="orderTime"]').value.trim();
+    const promiseDetail = card.querySelector('[data-field="promiseDetail"]').value.trim();
+    if (customerName || orderTime || promiseDetail) {
+      entries.push(
+        `Customer: ${customerName || 'Not given'} | Order time: ${orderTime || 'Not given'} | Promise: ${promiseDetail || 'Not given'}`
+      );
+    }
+  });
+  return entries.join('\n');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  status.textContent = 'Generating summary...';
+  status.classList.remove('error');
+  result.classList.remove('show');
+
+  const payload = {
+    name: document.getElementById('name').value,
+    shiftDate: document.getElementById('shiftDate').value,
+    shiftTime: document.getElementById('shiftTime').value,
+    promises: collectPromises(),
+    notes: document.getElementById('notes').value,
+  };
+
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+
+    summaryText.textContent = data.summary;
+    result.classList.add('show');
+    status.textContent = '';
+    loadRecent();
+  } catch (err) {
+    status.textContent = 'Something went wrong. Try again.';
+    status.classList.add('error');
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
+
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(summaryText.textContent);
+  copyBtn.textContent = 'Copied!';
+  setTimeout(() => (copyBtn.textContent = 'Copy to clipboard'), 1500);
+});
+
+const recentList = document.getElementById('recentList');
+
+function formatWhen(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+}
+
+async function loadRecent() {
+  try {
+    const res = await fetch('/summaries');
+    const summaries = await res.json();
+
+    if (summaries.length === 0) {
+      recentList.innerHTML = '<p class="recent-empty">No handoffs saved yet.</p>';
+      return;
+    }
+
+    recentList.innerHTML = '';
+    summaries.forEach((entry) => {
+      const item = document.createElement('div');
+      item.className = 'recent-item';
+      item.innerHTML = `
+        <div class="meta">${entry.name || 'Unknown'} — ${entry.shiftDate || ''} (${entry.shiftTime || ''})</div>
+        <div class="sub">${formatWhen(entry.createdAt)}</div>
+      `;
+      item.addEventListener('click', () => showSavedSummary(entry));
+      recentList.appendChild(item);
+    });
+  } catch (err) {
+    recentList.innerHTML = '<p class="recent-empty">Could not load recent handoffs.</p>';
+  }
+}
+
+function showSavedSummary(entry) {
+  summaryText.textContent = entry.summary;
+  result.classList.add('show');
+  result.scrollIntoView({ behavior: 'smooth' });
+}
+
+loadRecent();
+
+</script>
+</body>
+</html>
